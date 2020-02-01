@@ -84,10 +84,10 @@ class FakeScanner2D(object):
 
 
 scanner = FakeScanner2D("fish.png")
-pos = np.array([100, 100])
-towards = np.array([1, 1])
-fov = np.pi/2
-res = 100
+pos = np.array([100, 100]) # Position of the camera
+towards = np.array([1, 1]) # Direction of the camera
+fov = np.pi/2 # Field of view of the camera
+res = 100 # Resolution of the camera
 scanner.get_range_scan(pos, towards, fov, res, do_plot=True)
 plt.show()
 
