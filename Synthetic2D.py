@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Feb 17 10:43:09 2020
+
+@author: Rachel
+"""
+
 """
 Purpose: To simulate a 2D range camera by finding the largest
 contour on an image and using it as the object of interest
@@ -6,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg 
 import skimage
+import math
 from shapely.geometry import LineString, LinearRing
 
 class FakeScanner2D(object):
@@ -66,21 +74,91 @@ class FakeScanner2D(object):
         """
 
         W, H = self.I.shape
-        max_dist = np.sqrt(W**2 + H**2)
+        max_dist = 2*np.sqrt(W**2 + H**2)
         ring = LinearRing(self.contour)
+        
+        ## These two lines are the key lines for finding the intersection
+        ## but the direction will change from towards to something else
+        ## based on your viewing angle
         line = LineString([pos, pos+towards*max_dist])
         x = line.intersection(ring)
-        if do_plot:
+        
+        ## Initialize an array that will hold the range scan, and return 
+        ## at the end
+        range_scan = np.inf*np.ones(res)
+        
+        
+        if do_plot: ## Eventually, we want to make sure that even if we choose
+            ## not to display a debugging plot that shows the intersections, our
+            ## code is still able to compute the range scan and return it
+            plt.subplot(1, 2, 1) # 1 Row of plots, 2 columns of plots, do the first one
             self.display_contour()
             plt.scatter([pos[0]], [pos[1]])
+            
+            thetas = np.linspace(-fov/2, fov/2, res) #all thetas within field of view
+            intersections = np.linspace(np.inf, np.inf, res)  
+            
+            ## This is the last step of extracting an intersection, so
+            ## this is another thing you'll want to do for every ray
+            ## This checks if there was an intersection at all
+            ## If it doesn't intersect, you can set the range to np.inf (infinity)
             if len(x) > 0:
                 # If there was an intersection, draw the closest one
                 x = np.array(x[0]) # Extract closest intersection
-                segment = np.array([pos, x])
-                plt.plot(segment[:, 0], segment[:, 1])
+                segment = np.array([pos, x]) 
+                plt.plot(segment[:, 0], segment[:, 1]) 
                 plt.scatter(x[0], x[1])
             
+            #towards = np.array([pos[0], pos[1], x[0], x[1]])
+            towards = np.array([ x[0], x[1]])
 
+            #right = np.array([pos[0], pos[1],-x[1], x[0]])
+            right = np.array([-x[1], x[0]])
+            
+            #plt.plot(right[0::2], right[1::2])
+            #plt.scatter(right[2], right[3])
+            
+            plt.plot([pos[0], right[0]], [pos[1], right[1]])
+            plt.scatter(right[0], right[1])
+            
+            for i,theta in enumerate(thetas):
+                    ## TODO: Update this equation to be in the new coordinate
+                    ## system with "towards" and "right" vectors
+                    ## Ex) If I had a vector T and a vector R, which were each
+                    ## 2-element numpy arrays, I could write V = T + a*R, where
+                    ## a is some scalar, and V will then be a 2-element 
+                    ## numpy array which you can think of as a vector
+                V = towards + math.atan(theta)*right
+                #plt.plot([pos[0], V[0]], [pos[1], V[1]])
+                
+                temp_line = LineString([pos, pos+V*max_dist]) #problem line
+                y = temp_line.intersection(ring) #find where these hit contour
+                #print(list(temp_line.coords))
+                #print(list(y.coords))
+                
+                
+                if len(list(y)) > 0: #if so:
+                        y = np.array(y[0])
+                        
+                        plt.scatter(y[0], y[1])
+                        intersections[i] = np.array([y[0], y[1]])#store points in 2d arrays each coordinate pair gets an index
+                        range_scan[i] = math.sqrt( (y[0]*y[0])+(y[1]*y[1])) #depth is magnitude?
+            
+            plt.axis('equal')
+      
+        ## Show the range scan in the second subplot on the right
+        plt.subplot(1, 2, 2)
+        plt.plot(thetas*180/np.pi, range_scan)
+        return range_scan
+                    
+    
+"""        
+def is_even(x):
+    result = False
+    if x % 2 == 0:
+        result = True
+    return result
+"""
 
 
 scanner = FakeScanner2D("fish.png")
@@ -90,4 +168,3 @@ fov = np.pi/2 # Field of view of the camera
 res = 100 # Resolution of the camera
 scanner.get_range_scan(pos, towards, fov, res, do_plot=True)
 plt.show()
-
