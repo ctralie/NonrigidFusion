@@ -75,7 +75,7 @@ class FakeScanner2D(object):
 
         W, H = self.I.shape
         max_dist = 2*np.sqrt(W**2 + H**2)
-        ring = LinearRing(self.contour)
+        ring = LinearRing(np.fliplr(self.contour)) ## TODO: Why fliplr?
         
         ## These two lines are the key lines for finding the intersection
         ## but the direction will change from towards to something else
@@ -85,7 +85,7 @@ class FakeScanner2D(object):
         
         ## Initialize an array that will hold the range scan, and return 
         ## at the end
-        range_scan = np.inf*np.ones(res)
+        range_scan = np.linspace(np.inf, np.inf, res) 
         
         
         if do_plot: ## Eventually, we want to make sure that even if we choose
@@ -96,13 +96,12 @@ class FakeScanner2D(object):
             plt.scatter([pos[0]], [pos[1]])
             
             thetas = np.linspace(-fov/2, fov/2, res) #all thetas within field of view
-            intersections = np.linspace(np.inf, np.inf, res)  
             
             ## This is the last step of extracting an intersection, so
             ## this is another thing you'll want to do for every ray
             ## This checks if there was an intersection at all
             ## If it doesn't intersect, you can set the range to np.inf (infinity)
-            if len(x) > 0:
+            if not x.is_empty:
                 # If there was an intersection, draw the closest one
                 x = np.array(x[0]) # Extract closest intersection
                 segment = np.array([pos, x]) 
@@ -110,16 +109,17 @@ class FakeScanner2D(object):
                 plt.scatter(x[0], x[1])
             
             #towards = np.array([pos[0], pos[1], x[0], x[1]])
-            towards = np.array([ x[0], x[1]])
+            #towards = np.array([ x[0], x[1]])
 
             #right = np.array([pos[0], pos[1],-x[1], x[0]])
-            right = np.array([-x[1], x[0]])
+            right = np.array([towards[1], -towards[0]])
             
             #plt.plot(right[0::2], right[1::2])
             #plt.scatter(right[2], right[3])
             
-            plt.plot([pos[0], right[0]], [pos[1], right[1]])
-            plt.scatter(right[0], right[1])
+            rightdisp = pos + 50*right
+            plt.plot([pos[0], rightdisp[0]], [pos[1], rightdisp[1]])
+            plt.scatter(rightdisp[0], rightdisp[1])
             
             for i,theta in enumerate(thetas):
                     ## TODO: Update this equation to be in the new coordinate
@@ -129,22 +129,20 @@ class FakeScanner2D(object):
                     ## a is some scalar, and V will then be a 2-element 
                     ## numpy array which you can think of as a vector
                 V = towards + math.atan(theta)*right
-                #plt.plot([pos[0], V[0]], [pos[1], V[1]])
+                plt.plot([pos[0], pos[0]+100*V[0]], [pos[1], pos[1]+100*V[1]])
                 
                 temp_line = LineString([pos, pos+V*max_dist]) #problem line
                 y = temp_line.intersection(ring) #find where these hit contour
                 #print(list(temp_line.coords))
                 #print(list(y.coords))
-                
-                
-                if len(list(y)) > 0: #if so:
-                        y = np.array(y[0])
-                        
-                        plt.scatter(y[0], y[1])
-                        intersections[i] = np.array([y[0], y[1]])#store points in 2d arrays each coordinate pair gets an index
-                        range_scan[i] = math.sqrt( (y[0]*y[0])+(y[1]*y[1])) #depth is magnitude?
-            
+                if not y.is_empty: #if so:
+                    y = np.array(y[0])
+                    plt.scatter(y[0], y[1])
+                    diff = y - pos
+                    dist = np.sqrt(np.sum(diff**2))
+                    range_scan[i] = dist #depth is magnitude?  Yes!
             plt.axis('equal')
+            plt.gca().invert_yaxis()
       
         ## Show the range scan in the second subplot on the right
         plt.subplot(1, 2, 2)
