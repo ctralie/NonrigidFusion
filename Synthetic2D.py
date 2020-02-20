@@ -135,10 +135,51 @@ class FakeScanner2D(object):
         return range_scan
 
 
+class Reconstruction2D(object):
+    """
+    Attributes
+    ----------
+    res: int
+        The number of pixels across each axis in the grid
+    xmin: float
+        Min x coordinate
+    xmax: float
+        Max x coordinate
+    ymin: float
+        Min y coordinate
+    ymax: float
+        Max y coordinate
+    X: ndarray(res, res)
+        The x coordinates of all pixels in the grid
+    Y: ndarray(res, res)
+        The y coordinates of all pixels in the grid
+    """
+    
+    def __init__(self, res, xmin, xmax, ymin, ymax):
+        # Store grid information as local variables
+        self.res = res
+        self.xmin = xmin
+        self.xmax = xmax
+        self.ymin = ymin
+        self.ymax = ymax
+        pixx = np.linspace(xmin, xmax, res)
+        pixy = np.linspace(ymin, ymax, res)
+        self.X, self.Y = np.meshgrid(pixx, pixy)
+        
+
 scanner = FakeScanner2D("fish.png")
 pos = np.array([100, 100]) # Position of the camera
 towards = np.array([1, 1]) # Direction of the camera
 fov = np.pi/2 # Field of view of the camera
 res = 100 # Resolution of the camera
-range_scan = scanner.get_range_scan(pos, towards, fov, res, do_plot=False)
-plt.plot(range_scan)
+range_scan = scanner.get_range_scan(pos, towards, fov, res, do_plot=True)
+plt.show()
+
+recon = Reconstruction2D(200, 0, 800, 0, 800)
+plt.subplot(121)
+plt.imshow(recon.X)
+plt.colorbar()
+plt.subplot(122)
+plt.imshow(recon.Y)
+plt.colorbar()
+plt.tight_layout()
