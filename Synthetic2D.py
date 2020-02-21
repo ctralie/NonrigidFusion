@@ -14,7 +14,8 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg 
 import skimage
 import math
-from shapely.geometry import LineString, LinearRing
+import time
+from Lines2D import ray_intersect_loop
 
 class FakeScanner2D(object):
     """
@@ -46,14 +47,14 @@ class FakeScanner2D(object):
         if len(contours) > 0:
             sizes = np.array([c.shape[0] for c in contours])
             largest = contours[np.argmax(sizes)]
-        self.contour = largest
+        self.contour = np.flipud(largest)
 
     def display_contour(self):
         """
         Draw the image, along with the contour
         """
-        plt.imshow(self.I, cmap='gray')
-        plt.plot(self.contour[:, 1], self.contour[:, 0])
+        plt.imshow(self.I.T, cmap='gray')
+        plt.plot(self.contour[:, 0], self.contour[:, 1])
     
     def get_range_scan(self, pos, towards, fov, res, do_plot=False):
         """
@@ -71,22 +72,21 @@ class FakeScanner2D(object):
             The number of samples to take
         do_plot: boolean
             Whether to plot the camera position and direction
+        
+        Returns
+        -------
+        range_scan: ndarray(res)
+            The depth scans
+        normals: ndarray(res, 2)
+            The normals associated to each point of intersection
         """
 
         W, H = self.I.shape
-        max_dist = 2*np.sqrt(W**2 + H**2)
-        ring = LinearRing(np.fliplr(self.contour)) ## TODO: Why fliplr?
-        
-        ## These two lines are the key lines for finding the intersection
-        ## but the direction will change from towards to something else
-        ## based on your viewing angle
-        line = LineString([pos, pos+towards*max_dist])
-        x = line.intersection(ring)
         
         ## Initialize an array that will hold the range scan, and return 
         ## at the end
-        range_scan = np.linspace(np.inf, np.inf, res) 
-        
+        range_scan = np.linspace(np.inf, np.inf, res)
+        normals = np.zeros((res, 2))        
         
         if do_plot: ## Eventually, we want to make sure that even if we choose
             ## not to display a debugging plot that shows the intersections, our
@@ -114,17 +114,17 @@ class FakeScanner2D(object):
             if do_plot:
                 plt.plot([pos[0], pos[0]+100*V[0]], [pos[1], pos[1]+100*V[1]])
             
-            temp_line = LineString([pos, pos+V*max_dist]) #problem line
-            y = temp_line.intersection(ring) #find where these hit contour
-            #print(list(temp_line.coords))
-            #print(list(y.coords))
-            if not y.is_empty: #if so:
-                y = np.array(y[0])
+            res = ray_intersect_loop(pos, V, self.contour)
+            if  res['hit']:
+                # Depth is distance of camera to intersection
+                y = res['p']
                 diff = y - pos
                 dist = np.sqrt(np.sum(diff**2))
-                range_scan[i] = dist #depth is magnitude?  Yes!
+                range_scan[i] = dist
+                normals[i, :] = res['n']
                 if do_plot:
                     plt.scatter(y[0], y[1])
+                    plt.plot([y[0], y[0]+50*+normals[i, 0]], [y[1], y[1]+50*normals[i, 1]])
         
         if do_plot:
             plt.axis('equal')
@@ -175,6 +175,7 @@ res = 100 # Resolution of the camera
 range_scan = scanner.get_range_scan(pos, towards, fov, res, do_plot=True)
 plt.show()
 
+
 recon = Reconstruction2D(200, 0, 800, 0, 800)
 plt.subplot(121)
 plt.imshow(recon.X)
@@ -183,3 +184,4 @@ plt.subplot(122)
 plt.imshow(recon.Y)
 plt.colorbar()
 plt.tight_layout()
+plt.show()
