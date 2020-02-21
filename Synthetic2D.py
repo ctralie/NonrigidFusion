@@ -12,6 +12,7 @@ contour on an image and using it as the object of interest
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg 
+from sklearn.neighbors import KDTree
 import skimage
 import math
 import time
@@ -149,10 +150,12 @@ class Reconstruction2D(object):
         Min y coordinate
     ymax: float
         Max y coordinate
-    X: ndarray(res, res)
-        The x coordinates of all pixels in the grid
-    Y: ndarray(res, res)
-        The y coordinates of all pixels in the grid
+    XGrid: ndarray(res*res, 2)
+        The locations of the points on the grid
+    SDF: ndarray(res, res)
+        The signed distance image
+    weights: ndarray(res, res)
+        Weights for the SDF points (see more info in Curless/Levoy)
     """
     
     def __init__(self, res, xmin, xmax, ymin, ymax):
@@ -164,7 +167,37 @@ class Reconstruction2D(object):
         self.ymax = ymax
         pixx = np.linspace(xmin, xmax, res)
         pixy = np.linspace(ymin, ymax, res)
-        self.X, self.Y = np.meshgrid(pixx, pixy)
+        X, Y = np.meshgrid(pixx, pixy)
+        self.XGrid = np.array([X.flatten(), Y.flatten()])
+        self.SDF = np.inf*np.ones((res, res)) # The signed distance image
+        self.weights = np.ones((res, res))
+    
+    def incorporate_scan(self, pos, towards, fov, range_scan):
+        """
+        Given a range scan, update the signed distance image and the weights
+        to incorporate the new scan.  You may assume
+        Parameters
+        ----------
+        pos: ndarray(2)
+            The x/y position of the camera that took this scan
+        towards: ndarray(2)
+            A unit vector representing where the camera that took
+            this scan was pointed
+        fov: float
+            The field of view of the camera in radians
+        range_scan: ndarray(N)
+            The range scan of the scanner
+        """
+
+        ## TODO: Transform the range scan into x/y coordinates based on the
+        ## position, orientation, and field of view of the camera.  There
+        ## are a number of ways to do this, but the easiest way is probably
+        ## just to setup a bunch of directions again based on towards and right,
+        ## making sure that the final direction vector is a unit vector.  Then,
+        ## given a direction *v* and a distance *d*, the position would be
+        ## the vector addition p + d*v
+        pass
+
         
 
 scanner = FakeScanner2D("fish.png")
