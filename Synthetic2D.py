@@ -171,11 +171,9 @@ class Reconstruction2D(object):
         self.XGrid = np.array([X.flatten(), Y.flatten()]).T
        # print(self.XGrid)
         self.SDF = np.inf*np.ones((res, res)) # The signed distance image
-        
-        
         self.weights = np.ones((res, res))
     
-    def incorporate_scan(self, pos, towards, fov, range_scan, normals):
+    def get_scan_points(self, pos, towards, fov, res, range_scan, normals):
         """
         Given a range scan, update the signed distance image and the weights
         to incorporate the new scan.  You may assume
@@ -188,67 +186,96 @@ class Reconstruction2D(object):
             this scan was pointed
         fov: float
             The field of view of the camera in radians
+        res: int
+            Resolution of the camere
         range_scan: ndarray(N)
             The range scan of the scanner
+        normals: ndarray(N, 2)
+            The normals at each point of intersection
+            (TODO: They are in global coordinates now, should be relative to camera)
+        
+        Returns
+        -------
+        V: ndarray(M <= N, 2)
+            Points scanned in global coordinates that were actually seen 
+            (non-infinite)
+        N: ndarray(M <= N, 2)
+            Array of corresponding normals
         """
-
-        ## TODO: Transform the range scan into x/y coordinates based on the
-        ## position, orientation, and field of view of the camera.  There
-        ## are a number of ways to do this, but the easiest way is probably
-        ## just to setup a bunch of directions again based on towards and right,
-        ## making sure that the final direction vector is a unit vector.  Then,
-        ## given a direction *v* and a distance *d*, the position would be
-        ## the vector addition p + d*v
-        
         right = np.array([towards[1], -towards[0]])
-        
         thetas = np.linspace(-fov/2, fov/2, res)
-        
         V = np.ones((res,2)) #will hold vectors
-        #print(V)        
-        
         #recreation of x,y coordinates for each intersection as unit vectors
         for i,theta in enumerate(thetas):
             v = towards + np.tan(theta)*right
             m = np.sqrt(np.sum(v*v))
             v = v / m
            # print(v) #unit vector test
-            V[i] = pos +( range_scan[i]*v)
+            V[i] = pos + range_scan[i]*v
         V = V[np.isfinite(range_scan), :]
-            
+        N = normals[np.isfinite(range_scan), :]
+        return V, N
+
+    def incorporate_scan(self, V, N, trunc_dist):
+        """
+        Given a range scan, update the signed distance image and the weights
+        to incorporate the new scan.
+        Parameters
+        ----------
+        V: ndarray(M, 2)
+            Points scanned in global coordinates that were actually seen 
+            (non-infinite)
+        N: ndarray(M, 2)
+            Array of corresponding normals in global coordinates
+        trunc_dist: float
+            Threshold at which to truncate
+        """
         tree = KDTree(V)
-        print(V.shape)
-        print(self.XGrid.shape)
         distances, indices = tree.query(self.XGrid, k=1)
         indices = indices.flatten()
-       
+        distances = distances.flatten()
+
         #signed distance function
         # All the points on V that are closest to the corresponding
         # points on XGrid
         P = V[indices, :]
-        N = normals[indices, :]
-        sdf = np.sum((self.XGrid - P)*N, 1)
+        N2 = N[indices, :]
+        sdf = np.sum((self.XGrid - P)*N2, 1)
+        sdf[distances > trunc_dist] = np.inf
+        vmax = np.max(np.abs(sdf[np.isfinite(sdf)]))
 
         sdf = np.reshape(sdf, (self.res, self.res))
         plt.figure(figsize=(10, 5))
         plt.subplot(121)
         plt.imshow(np.reshape(distances, (self.res, self.res)))
+        plt.colorbar()
+        plt.title("Euclidean Distances of Nearest Neighbor")
         plt.subplot(122)
-        plt.imshow(sdf, cmap='seismic')
+        plt.imshow(sdf, cmap='seismic', vmin=-vmax, vmax=vmax)
         plt.colorbar()
         plt.title("Signed distance")
         plt.show()
 
-        
+
+def get_arc_test(start_theta, end_theta, res):
+    t = np.linspace(start_theta, end_theta, res)
+    V = np.zeros((t.size, 2))
+    V[:, 0] = 400 + 100*np.cos(t)
+    V[:, 1] = 400 + 100*np.sin(t)
+    N = np.zeros((t.size, 2))
+    N[:, 0] = np.cos(t)
+    N[:, 1] = np.sin(t)
+    return V, N
 
 scanner = FakeScanner2D("fish.png")
 pos = np.array([100, 100]) # Position of the camera
 towards = np.array([1, 1]) # Direction of the camera
 fov = np.pi/2 # Field of view of the camera
 res = 100 # Resolution of the camera
-range_scan, normals = scanner.get_range_scan(pos, towards, fov, res, do_plot=True)
-plt.show()
-
+range_scan, normals = scanner.get_range_scan(pos, towards, fov, res)
 
 recon = Reconstruction2D(200, 0, 800, 0, 800)
-recon.incorporate_scan(pos, towards, fov, range_scan, normals)
+V, N = recon.get_scan_points(pos, towards, fov, res, range_scan, normals)
+#V, N = get_arc_test(0, np.pi/2, 10000)
+
+recon.incorporate_scan(V, N, 50.0)
