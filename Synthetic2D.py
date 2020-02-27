@@ -86,7 +86,7 @@ class FakeScanner2D(object):
         
         ## Initialize an array that will hold the range scan, and return 
         ## at the end
-        range_scan = np.linspace(np.inf, np.inf, res)
+        range_scan = np.inf*np.ones(res)
         normals = np.zeros((res, 2))        
         
         if do_plot: ## Eventually, we want to make sure that even if we choose
@@ -111,7 +111,7 @@ class FakeScanner2D(object):
                 ## 2-element numpy arrays, I could write V = T + a*R, where
                 ## a is some scalar, and V will then be a 2-element 
                 ## numpy array which you can think of as a vector
-            V = towards + math.atan(theta)*right
+            V = towards + np.tan(theta)*right
             if do_plot:
                 plt.plot([pos[0], pos[0]+100*V[0]], [pos[1], pos[1]+100*V[1]])
             
@@ -133,7 +133,7 @@ class FakeScanner2D(object):
             ## Show the range scan in the second subplot on the right
             plt.subplot(1, 2, 2)
             plt.plot(thetas*180/np.pi, range_scan)
-        return range_scan
+        return range_scan, normals
 
 
 class Reconstruction2D(object):
@@ -168,14 +168,14 @@ class Reconstruction2D(object):
         pixx = np.linspace(xmin, xmax, res)
         pixy = np.linspace(ymin, ymax, res)
         X, Y = np.meshgrid(pixx, pixy)
-        self.XGrid = np.array([X.flatten(), Y.flatten()])
+        self.XGrid = np.array([X.flatten(), Y.flatten()]).T
        # print(self.XGrid)
         self.SDF = np.inf*np.ones((res, res)) # The signed distance image
         
         
         self.weights = np.ones((res, res))
     
-    def incorporate_scan(self, pos, towards, fov, range_scan):
+    def incorporate_scan(self, pos, towards, fov, range_scan, normals):
         """
         Given a range scan, update the signed distance image and the weights
         to incorporate the new scan.  You may assume
@@ -209,37 +209,35 @@ class Reconstruction2D(object):
         
         #recreation of x,y coordinates for each intersection as unit vectors
         for i,theta in enumerate(thetas):
-            v = towards + math.atan(theta)*right
-            m = v[0] + v[1]
+            v = towards + np.tan(theta)*right
+            m = np.sqrt(np.sum(v*v))
             v = v / m
            # print(v) #unit vector test
             V[i] = pos +( range_scan[i]*v)
-            print(V[i])  #test
-            
-       
-       # for x in (self.XGrid):
-            #print(self.XGrid[i])
-            
+        V = V[np.isfinite(range_scan), :]
             
         tree = KDTree(V)
+        print(V.shape)
+        print(self.XGrid.shape)
         distances, indices = tree.query(self.XGrid, k=1)
-       
-        #test print of KD Tree results
-        plt.figure(figsize=(12, 5))
-        plt.subplot(121)
-        plt.scatter(self.XGrid[:, 0], self.XGrid[:, 1], c=distances.flatten())
-        plt.colorbar()
-        plt.title("Distances of closest point ")
-        plt.subplot(122)
-        plt.scatter(self.XGrid[:, 0], self.XGrid[:, 1], c=indices.flatten())
-        plt.colorbar()
-        plt.title("Indices of closest point")
+        indices = indices.flatten()
        
         #signed distance function
-        for i in (indices):
-            self.SDF[i] = (V[i]-indices[i,:]) #*normals[i,:] #(x-p)*n -what is x? normals not needed b/c 2D? 
-                
-        pass
+        # All the points on V that are closest to the corresponding
+        # points on XGrid
+        P = V[indices, :]
+        N = normals[indices, :]
+        sdf = np.sum((self.XGrid - P)*N, 1)
+
+        sdf = np.reshape(sdf, (self.res, self.res))
+        plt.figure(figsize=(10, 5))
+        plt.subplot(121)
+        plt.imshow(np.reshape(distances, (self.res, self.res)))
+        plt.subplot(122)
+        plt.imshow(sdf, cmap='seismic')
+        plt.colorbar()
+        plt.title("Signed distance")
+        plt.show()
 
         
 
@@ -248,9 +246,9 @@ pos = np.array([100, 100]) # Position of the camera
 towards = np.array([1, 1]) # Direction of the camera
 fov = np.pi/2 # Field of view of the camera
 res = 100 # Resolution of the camera
-range_scan = scanner.get_range_scan(pos, towards, fov, res, do_plot=True)
+range_scan, normals = scanner.get_range_scan(pos, towards, fov, res, do_plot=True)
 plt.show()
 
 
 recon = Reconstruction2D(200, 0, 800, 0, 800)
-recon.incorporate_scan(pos, towards, fov, range_scan)
+recon.incorporate_scan(pos, towards, fov, range_scan, normals)
