@@ -169,7 +169,10 @@ class Reconstruction2D(object):
         pixy = np.linspace(ymin, ymax, res)
         X, Y = np.meshgrid(pixx, pixy)
         self.XGrid = np.array([X.flatten(), Y.flatten()])
+       # print(self.XGrid)
         self.SDF = np.inf*np.ones((res, res)) # The signed distance image
+        
+        
         self.weights = np.ones((res, res))
     
     def incorporate_scan(self, pos, towards, fov, range_scan):
@@ -196,6 +199,46 @@ class Reconstruction2D(object):
         ## making sure that the final direction vector is a unit vector.  Then,
         ## given a direction *v* and a distance *d*, the position would be
         ## the vector addition p + d*v
+        
+        right = np.array([towards[1], -towards[0]])
+        
+        thetas = np.linspace(-fov/2, fov/2, res)
+        
+        V = np.ones((res,2)) #will hold vectors
+        #print(V)        
+        
+        #recreation of x,y coordinates for each intersection as unit vectors
+        for i,theta in enumerate(thetas):
+            v = towards + math.atan(theta)*right
+            m = v[0] + v[1]
+            v = v / m
+           # print(v) #unit vector test
+            V[i] = pos +( range_scan[i]*v)
+            print(V[i])  #test
+            
+       
+       # for x in (self.XGrid):
+            #print(self.XGrid[i])
+            
+            
+        tree = KDTree(V)
+        distances, indices = tree.query(self.XGrid, k=1)
+       
+        #test print of KD Tree results
+        plt.figure(figsize=(12, 5))
+        plt.subplot(121)
+        plt.scatter(self.XGrid[:, 0], self.XGrid[:, 1], c=distances.flatten())
+        plt.colorbar()
+        plt.title("Distances of closest point ")
+        plt.subplot(122)
+        plt.scatter(self.XGrid[:, 0], self.XGrid[:, 1], c=indices.flatten())
+        plt.colorbar()
+        plt.title("Indices of closest point")
+       
+        #signed distance function
+        for i in (indices):
+            self.SDF[i] = (V[i]-indices[i,:]) #*normals[i,:] #(x-p)*n -what is x? normals not needed b/c 2D? 
+                
         pass
 
         
@@ -210,11 +253,4 @@ plt.show()
 
 
 recon = Reconstruction2D(200, 0, 800, 0, 800)
-plt.subplot(121)
-plt.imshow(recon.X)
-plt.colorbar()
-plt.subplot(122)
-plt.imshow(recon.Y)
-plt.colorbar()
-plt.tight_layout()
-plt.show()
+recon.incorporate_scan(pos, towards, fov, range_scan)
