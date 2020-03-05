@@ -236,7 +236,7 @@ class Reconstruction2D(object):
         indices = indices.flatten()
         distances = np.reshape(distances, (self.res, self.res))
 
-        #signed distance function
+        ## Step 1: Compute the Signed distance function
         # All the points on V that are closest to the corresponding
         # points on XGrid
         P  = V[indices, :]
@@ -246,6 +246,8 @@ class Reconstruction2D(object):
         w = np.zeros_like(sdf)
         w[distances < trunc_dist] = 1
 
+        ## Step 2: Incorporate this signed distance
+        ## function into the overall signed distance function
         numerator = np.nanprod(np.array([self.weights, self.SDF]), axis=0)
         numerator = numerator + w*sdf
         self.weights = w + self.weights
