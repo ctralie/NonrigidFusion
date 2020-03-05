@@ -170,8 +170,8 @@ class Reconstruction2D(object):
         X, Y = np.meshgrid(pixx, pixy)
         self.XGrid = np.array([X.flatten(), Y.flatten()]).T
        # print(self.XGrid)
-        self.SDF = np.inf*np.ones((res, res)) # The signed distance image
-        self.weights = np.ones((res, res))
+        self.SDF = np.nan*np.ones((res, res)) # The signed distance image
+        self.weights = np.zeros((res, res))
     
     def get_scan_points(self, pos, towards, fov, res, range_scan, normals):
         """
@@ -216,10 +216,9 @@ class Reconstruction2D(object):
         N = normals[np.isfinite(range_scan), :]
         return V, N
 
-    def incorporate_scan(self, V, N, trunc_dist):
+    def incorporate_scan(self, V, N, trunc_dist, do_plot=False):
         """
-        Given a range scan, update the signed distance image and the weights
-        to incorporate the new scan.
+        Given a range scan, update the signed distance image and the weights to incorporate the new scan.
         Parameters
         ----------
         V: ndarray(M, 2)
@@ -230,30 +229,85 @@ class Reconstruction2D(object):
         trunc_dist: float
             Threshold at which to truncate
         """
+        if V.size == 0:
+            return
         tree = KDTree(V)
         distances, indices = tree.query(self.XGrid, k=1)
         indices = indices.flatten()
-        distances = distances.flatten()
+        distances = np.reshape(distances, (self.res, self.res))
 
         #signed distance function
         # All the points on V that are closest to the corresponding
         # points on XGrid
-        P = V[indices, :]
+        P  = V[indices, :]
         N2 = N[indices, :]
         sdf = np.sum((self.XGrid - P)*N2, 1)
-        sdf[distances > trunc_dist] = np.inf
-        vmax = np.max(np.abs(sdf[np.isfinite(sdf)]))
-
         sdf = np.reshape(sdf, (self.res, self.res))
-        plt.figure(figsize=(10, 5))
-        plt.subplot(121)
-        plt.imshow(np.reshape(distances, (self.res, self.res)))
-        plt.colorbar()
-        plt.title("Euclidean Distances of Nearest Neighbor")
-        plt.subplot(122)
+        w = np.zeros_like(sdf)
+        w[distances < trunc_dist] = 1
+
+        numerator = np.nanprod(np.array([self.weights, self.SDF]), axis=0)
+        numerator = numerator + w*sdf
+        self.weights = w + self.weights
+        idx = self.weights > 0
+        self.SDF[idx] = numerator[idx] / self.weights[idx]
+        self.SDF[self.weights == 0] = np.nan
+
+        if do_plot:
+            sdf[distances >= trunc_dist] = np.nan
+            vmax = np.max(np.abs(sdf[~np.isnan(sdf)]))
+            plt.figure(figsize=(15, 5))
+            plt.subplot(131)
+            plt.imshow(distances)
+            plt.gca().invert_yaxis()
+            plt.colorbar()
+            plt.title("Euclidean Distances of Nearest Neighbor")
+            plt.subplot(132)
+            plt.imshow(sdf, cmap='seismic', vmin=-vmax, vmax=vmax)
+            plt.gca().invert_yaxis()
+            plt.colorbar()
+            plt.title("Signed distance")
+            plt.subplot(133)
+            plt.imshow(w)
+            plt.gca().invert_yaxis()
+            plt.title("Weights")
+            plt.colorbar()
+            plt.show()
+    
+    def plot_reconstruction(self, scanner = None, cameras = []):
+        """
+        Plot the reconstruction
+        Parameters
+        ----------
+        scanner: FakeScanner2D
+            (Optional) The scanner object that was used to 
+            obtain the scans.  If it's provided, the ground
+            truth image will be drawn for context
+        cameras: list of [{'pos':ndarray(2), 'towards':ndarray(2)}]
+            (Optional) If specified a list of cameras that were used to obtain the scans
+        """
+        sdf = self.SDF
+        vmax = np.max(np.abs(sdf[~np.isnan(sdf)]))
+        plt.figure(figsize=(15, 5))
+        plt.subplot(131)
+        for camera in cameras:
+            pos, towards = camera['pos'], camera['towards']
+            if scanner:
+                scanner.display_contour()
+            plt.scatter([pos[0]], [pos[1]])
+            p2 = pos + 20*towards
+            plt.plot([pos[0], p2[0]], [pos[1], p2[1]])
+        plt.gca().invert_yaxis()
+        plt.subplot(132)
         plt.imshow(sdf, cmap='seismic', vmin=-vmax, vmax=vmax)
+        plt.gca().invert_yaxis()
         plt.colorbar()
         plt.title("Signed distance")
+        plt.subplot(133)
+        plt.imshow(self.weights)
+        plt.gca().invert_yaxis()
+        plt.title("Weights")
+        plt.colorbar()
         plt.show()
 
 
@@ -269,17 +323,25 @@ def get_arc_test(start_theta, end_theta, res):
 
 tic = time.time()
 scanner = FakeScanner2D("fish.png")
-pos = np.array([100, 100]) # Position of the camera
-towards = np.array([1, 1]) # Direction of the camera
+recon = Reconstruction2D(200, 0, 800, 0, 800)
+
 fov = np.pi/2 # Field of view of the camera
 res = 100 # Resolution of the camera
-range_scan, normals = scanner.get_range_scan(pos, towards, fov, res)
 
-recon = Reconstruction2D(200, 0, 800, 0, 800)
-V, N = recon.get_scan_points(pos, towards, fov, res, range_scan, normals)
-#V, N = get_arc_test(0, np.pi/2, 10000)
+trunc_dist = 20.0
+pos1 = np.array([100, 100]) # Position of the camera
+towards1 = np.array([1, 1]) # Direction of the camera
+range_scan, normals = scanner.get_range_scan(pos1, towards1, fov, res)
+V, N = recon.get_scan_points(pos1, towards1, fov, res, range_scan, normals)
+recon.incorporate_scan(V, N, trunc_dist, do_plot=True)
 
-recon.incorporate_scan(V, N, 50.0)
+pos2 = np.array([350, 75]) # Position of the camera
+towards2 = np.array([0, 1]) # Direction of the camera
+range_scan, normals = scanner.get_range_scan(pos2, towards2, fov, res)
+V, N = recon.get_scan_points(pos2, towards2, fov, res, range_scan, normals)
+recon.incorporate_scan(V, N, trunc_dist, do_plot=True)
+
+recon.plot_reconstruction(scanner, [{'pos':pos1, 'towards':towards1}, {'pos':pos2, 'towards':towards2}])
 
 toc = time.time()
 print("Elapsed Time: %.3g"%(toc-tic))
