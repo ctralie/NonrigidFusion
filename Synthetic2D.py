@@ -267,6 +267,7 @@ def get_arc_test(start_theta, end_theta, res):
     N[:, 1] = np.sin(t)
     return V, N
 
+tic = time.time()
 scanner = FakeScanner2D("fish.png")
 pos = np.array([100, 100]) # Position of the camera
 towards = np.array([1, 1]) # Direction of the camera
@@ -279,3 +280,6 @@ V, N = recon.get_scan_points(pos, towards, fov, res, range_scan, normals)
 #V, N = get_arc_test(0, np.pi/2, 10000)
 
 recon.incorporate_scan(V, N, 50.0)
+
+toc = time.time()
+print("Elapsed Time: %.3g"%(toc-tic))
