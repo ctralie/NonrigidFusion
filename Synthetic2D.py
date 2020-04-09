@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg 
 from sklearn.neighbors import KDTree
 import skimage
-import math
 import time
 from Lines2D import ray_intersect_loop
 
@@ -276,7 +275,7 @@ class Reconstruction2D(object):
             plt.colorbar()
             plt.show()
     
-    def plot_reconstruction(self, scanner = None, cameras = []):
+    def plot_reconstruction(self, scanner, cameras):
         """
         Plot the reconstruction
         Parameters
@@ -331,6 +330,7 @@ fov = np.pi/2 # Field of view of the camera
 res = 100 # Resolution of the camera
 
 trunc_dist = 20.0
+"""
 pos1 = np.array([100, 100]) # Position of the camera
 towards1 = np.array([1, 1]) # Direction of the camera
 range_scan, normals = scanner.get_range_scan(pos1, towards1, fov, res)
@@ -342,8 +342,65 @@ towards2 = np.array([0, 1]) # Direction of the camera
 range_scan, normals = scanner.get_range_scan(pos2, towards2, fov, res)
 V, N = recon.get_scan_points(pos2, towards2, fov, res, range_scan, normals)
 recon.incorporate_scan(V, N, trunc_dist, do_plot=True)
+"""
 
-recon.plot_reconstruction(scanner, [{'pos':pos1, 'towards':towards1}, {'pos':pos2, 'towards':towards2}])
+initialPosC = np.array([200,200]) #initial camera position in cartesian coordinates
+r = np.sqrt(initialPosC[0] **2 + initialPosC[1]**2) #radius of circle based off of initial camera position
+#initialPosP = np.array([np.sqrt(initialPosC[0]**2 + initialPosC[1]**2), np.arctan(initialPosC[1]/initialPosC[0])])
+
+thetas = [ 0, np.pi/6, np.pi/4, np.pi/3, np.pi/2, (2*np.pi)/3, (3*np.pi)/4, (5*np.pi)/6, np.pi, (7*np.pi)/6, (5*np.pi)/4, (4*np.pi)/3, (3* np.pi)/2, (5*np.pi)/3, (7*np.pi)/4, (11*np.pi)/6]
+#thetas = [np.pi/6, np.pi/4, np.pi/3] #testing a smaller array
+
+towards = np.array([1,1])
+
+cameras = [{'pos':initialPosC, 'towards':towards}] #list of [{'pos':ndarray(2), 'towards':ndarray(2)}]
+cameras.pop(0)
+
+for theta in thetas:
+    
+    if theta > 0 and theta < np.pi/2:
+        towards[0] = 1
+        towards [1] = 1
+    elif theta == np.pi/2:
+        towards[0] = 0
+        towards[1] = 1
+    elif theta > np.pi/2 and theta < np.pi:
+        towards[0] = 1
+        towards[1] = -1
+    elif theta == np.pi:
+        towards[0] = -1
+        towards[1] = 0
+    elif theta > np.pi and theta < (3*np.pi)/2:
+        towards[0] = 1
+        towards [1] = 1
+    elif theta == (3*np.pi) / 2:
+        towards[0] = 0
+        towards[1] = -1
+    else:
+        towards[0] = -1
+        towards[1] = 1
+    
+    
+    #towards is unit vector of polar coordinates
+    #towards[0] = (initialPosP[0] * np.cos(initialPosP[1])) / np.sqrt((initialPosP[0] * np.cos(initialPosP[1]))**2 + initialPosP[0] * np.sin(initialPosP[1])**2)
+    #towards[1] = (initialPosP[0] * np.sin(initialPosP[1])) / np.sqrt((initialPosP[0] * np.cos(initialPosP[1]))**2 + initialPosP[0] * np.sin(initialPosP[1])**2)
+    
+    xy = np.array([(r * np.cos(theta)) + 400, (r*np.sin(theta)) + 400])
+    #towards is unit vector of circle?
+    #towards[0] = (r * np.cos(theta)) /  np.sqrt ((r * np.cos(theta))**2 + (r * np.sin(theta))**2)
+    #towards [1] = (r * np.sin(theta)) /  np.sqrt ((r * np.cos(theta))**2 + (r * np.sin(theta))**2)
+   
+   
+    #xy = np.array([initialPosP[0]*np.cos(initialPosP[1]), initialPosP[0]*np.sin(initialPosP[1])])
+    cameras.append({'pos':xy, 'towards':towards})
+    
+    range_scan, normals = scanner.get_range_scan(xy, towards, fov, res)
+    V, N = recon.get_scan_points(xy, towards, fov, res, range_scan, normals)
+    recon.incorporate_scan(V,N, trunc_dist, do_plot=False)
+    
+   
+
+recon.plot_reconstruction(scanner, cameras)
 
 toc = time.time()
 print("Elapsed Time: %.3g"%(toc-tic))
