@@ -344,12 +344,15 @@ V, N = recon.get_scan_points(pos2, towards2, fov, res, range_scan, normals)
 recon.incorporate_scan(V, N, trunc_dist, do_plot=True)
 """
 
+fishCenter = np.array([400, 400])
 initialPosC = np.array([200,200]) #initial camera position in cartesian coordinates
-r = np.sqrt(initialPosC[0] **2 + initialPosC[1]**2) #radius of circle based off of initial camera position
+r = np.sqrt(np.sum((initialPosC-fishCenter)**2)) #radius of circle based off of initial camera position
 #initialPosP = np.array([np.sqrt(initialPosC[0]**2 + initialPosC[1]**2), np.arctan(initialPosC[1]/initialPosC[0])])
 
-thetas = [ 0, np.pi/6, np.pi/4, np.pi/3, np.pi/2, (2*np.pi)/3, (3*np.pi)/4, (5*np.pi)/6, np.pi, (7*np.pi)/6, (5*np.pi)/4, (4*np.pi)/3, (3* np.pi)/2, (5*np.pi)/3, (7*np.pi)/4, (11*np.pi)/6]
+#thetas = [ 0, np.pi/6, np.pi/4, np.pi/3, np.pi/2, (2*np.pi)/3, (3*np.pi)/4, (5*np.pi)/6, np.pi, (7*np.pi)/6, (5*np.pi)/4, (4*np.pi)/3, (3* np.pi)/2, (5*np.pi)/3, (7*np.pi)/4, (11*np.pi)/6]
 #thetas = [np.pi/6, np.pi/4, np.pi/3] #testing a smaller array
+num_cameras = 20
+thetas = np.linspace(0, 2*np.pi, num_cameras+1)[0:-1]
 
 towards = np.array([1,1])
 
@@ -357,25 +360,16 @@ cameras = [{'pos':initialPosC, 'towards':towards}] #list of [{'pos':ndarray(2), 
 cameras.pop(0)
 
 for theta in thetas:
-    
+    towards = np.zeros(2)
     if theta > 0 and theta < np.pi/2:
-        towards[0] = 1
-        towards [1] = 1
-    elif theta == np.pi/2:
-        towards[0] = 0
-        towards[1] = 1
-    elif theta > np.pi/2 and theta < np.pi:
-        towards[0] = 1
-        towards[1] = -1
-    elif theta == np.pi:
         towards[0] = -1
-        towards[1] = 0
-    elif theta > np.pi and theta < (3*np.pi)/2:
+        towards [1] = -1
+    elif theta >= np.pi/2 and theta < np.pi:
+        towards[0] = 1
+        towards[1] = -1
+    elif theta >= np.pi and theta < (3*np.pi)/2:
         towards[0] = 1
         towards [1] = 1
-    elif theta == (3*np.pi) / 2:
-        towards[0] = 0
-        towards[1] = -1
     else:
         towards[0] = -1
         towards[1] = 1
@@ -385,7 +379,10 @@ for theta in thetas:
     #towards[0] = (initialPosP[0] * np.cos(initialPosP[1])) / np.sqrt((initialPosP[0] * np.cos(initialPosP[1]))**2 + initialPosP[0] * np.sin(initialPosP[1])**2)
     #towards[1] = (initialPosP[0] * np.sin(initialPosP[1])) / np.sqrt((initialPosP[0] * np.cos(initialPosP[1]))**2 + initialPosP[0] * np.sin(initialPosP[1])**2)
     
-    xy = np.array([(r * np.cos(theta)) + 400, (r*np.sin(theta)) + 400])
+    
+    circle_xy = np.array([np.cos(theta), np.sin(theta)])
+    xy = r*circle_xy + fishCenter
+    towards = -circle_xy
     #towards is unit vector of circle?
     #towards[0] = (r * np.cos(theta)) /  np.sqrt ((r * np.cos(theta))**2 + (r * np.sin(theta))**2)
     #towards [1] = (r * np.sin(theta)) /  np.sqrt ((r * np.cos(theta))**2 + (r * np.sin(theta))**2)
@@ -404,3 +401,9 @@ recon.plot_reconstruction(scanner, cameras)
 
 toc = time.time()
 print("Elapsed Time: %.3g"%(toc-tic))
+
+plt.figure(figsize=(8, 8))
+contours = skimage.measure.find_contours(recon.SDF, 0)
+for c in contours:
+    plt.plot(c[:, 1], c[:, 0])
+plt.axis('equal')
