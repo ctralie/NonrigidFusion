@@ -2,7 +2,7 @@ import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
-import mcubes #https://github.com/pmneila/PyMCubes
+from skimage import measure
 
 def saveOffFileExternal(filename, VPos, ITris):
     """
@@ -80,22 +80,22 @@ def getBowlingPin():
     X, Y, Z = np.mgrid[:100, :100, :100]
     u = np.exp(-((X-70.0)**2 + (Y-70.0)**2 + (Z-70.0)**2)/(2.0*6.0**2))
     u += np.exp(-((X-50.0)**2 + (Y-50.0)**2 + (Z-50.0)**2)/(2.0*15.0**2))
-    VPos, ITris = mcubes.marching_cubes(u, 0.2)
+    VPos, ITris, _, _ = measure.marching_cubes_lewiner(u, 0.2, gradient_direction="ascent")
     saveOffFileExternal("bowlingpin.off", VPos, ITris)
 
 def getCutSphere():
     X, Y, Z = np.mgrid[:100, :100, :100]
     u = np.exp(-((X-50.0)**2 + (Y-50.0)**2 + (Z-50.0)**2)/(2.0*15.0**2))
     u -= np.exp(-((X-70.0)**2 + (Y-70.0)**2 + (Z-70.0)**2)/(2.0*6.0**2))
-    VPos, ITris = mcubes.marching_cubes(u, 0.01)
+    VPos, ITris, _, _ = measure.marching_cubes_lewiner(u, 0.01, gradient_direction="ascent")
     saveOffFileExternal("spherecut.off", VPos, ITris)
 
 def mySurface():
     pix = np.linspace(0, 1, 100)
     x, y, z = np.meshgrid(pix, pix, pix)
     f = getEllipsoidGaussian(x, y, z, [0.5, 0.5, 0.5], [1, 0, 0], 0.2, [0, 1, 0], 0.1, [0, 0, 1], 0.1)
-    VPos, ITris = mcubes.marching_cubes(f, 0.1)
+    VPos, ITris, _, _ = measure.marching_cubes_lewiner(f, 0.1, gradient_direction="ascent")
     saveOffFileExternal("mysurface.off", VPos, ITris)
 
 if __name__ == '__main__':
-    mySurface()
+    getBowlingPin()
