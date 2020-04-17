@@ -61,7 +61,7 @@ class FakeScanner3D(object):
             depth = np.array(depth[:, :, 0:2], dtype=float)/255
             depth = depth[:, :, 0] + depth[:, :, 1]/256
             depth = depth*(256*256)/(256*256-1)
-            depth[depth == 0] = np.nan
+            depth[depth == 0] = np.inf
 
             allNormals.append(normals)
             allDepth.append(depth)
@@ -111,8 +111,8 @@ class FakeScanner3D(object):
         vmin = np.inf
         vmax = 0
         for depth in self.allDepth:
-            vmin = min(vmin, np.nanmin(depth))
-            vmax = max(vmax, np.nanmax(depth))
+            vmin = min(vmin, np.min(depth[np.isfinite(depth)]))
+            vmax = max(vmax, np.max(depth[np.isfinite(depth)]))
         print("vmin = %.3g"%vmin)
         print("vmax = %.3g"%vmax)
         fac = 1
@@ -128,7 +128,7 @@ class FakeScanner3D(object):
             plt.title("Normals {}".format(i))
             plt.savefig("{}.png".format(i), bbox_inches='tight')
 
-def make_volume_video(X, prefix):
+def make_volume_video(X, prefix = ""):
     """
     Make a video of slices of a volume sweeping over
     the volume
@@ -145,7 +145,7 @@ def make_volume_video(X, prefix):
         plt.clf()
         plt.imshow(X[i, :, :], vmin=vmin, vmax=vmax)
         plt.colorbar()
-        plt.savefig("{}.png".format(i), bbox_inches='tight')
+        plt.savefig("{}{}.png".format(prefix, i), bbox_inches='tight')
 
 
 class Reconstruction3D(object):
@@ -197,30 +197,64 @@ class Reconstruction3D(object):
         to incorporate the new scan.  You may assume
         Parameters
         ----------
-        pos: ndarray(2)
-            The x/y position of the camera that took this scan
-        towards: ndarray(2)
-            A unit vector representing where the camera that took
-            this scan was pointed
-        fov: float
-            The field of view of the camera in radians
-        res: int
-            Resolution of the camere
-        range_scan: ndarray(N)
-            The range scan of the scanner
-        normals: ndarray(N, 2)
-            The normals at each point of intersection, 
-            *relative to the camera*
+        depth: ndarray(N1, N2)
+            The depth scan
+        normals: ndarray(N1, N2, 3)
+            The normals for each depth point
+        camera: {
+            'pos': ndarray(3)
+                Position of the camera,
+            'up': ndarray(3)
+                Up vector of the camera,
+            'right': ndarray(3)
+                Right vector of the camera,
+            'fovx': float
+                Field of view in x,
+            'fovy': float
+                Field of view in y
+        }
         
         Returns
         -------
-        V: ndarray(M <= N, 2)
+        V: ndarray(M <= N1*N2, 3)
             Points scanned in global coordinates that were actually seen 
             (non-infinite)
-        N: ndarray(M <= N, 2)
+        N: ndarray(M <= N1*N2, 3)
             Array of corresponding normals
         """
-        pass
+        N1, N2 = depth.shape
+        pos = camera['pos']
+        up, right = camera['up'], camera['right']
+        fovx, fovy = camera['fovx'], camera['fovy']
+        towards = np.cross(up, right) # Towards is up x right
+
+        ## Step 1: Transform all of the normals into world coordinates
+        # based on the orientation of the camera
+        R = np.zeros((3, 3))
+        R[:, 0] = right
+        R[:, 1] = up
+        R[:, 2] = -towards # Keep right handed
+        R = R.T # We want the inverse
+        # Reshape the normals to be (MN) x 3 instead of M x N x 3, 
+        # so that each normal is a long a row
+        N = np.reshape(normals, (normals.shape[0]*normals.shape[1], 3))
+        N = (R.dot(N.T)).T
+
+        ## Step 2: Create an MN x 3 matrix of the position of 
+        ## all of the points
+        VX, VY = np.meshgrid(np.linspace(-1, 1, N2), np.linspace(-1, 1, N1))
+        ## TODO: Translate the code below from C++ into numpy.  It is possible
+        ## to do this without loops, but use them if it's easier.  VX and VX
+        ## hold the vx and vy for every point in the scan.  You should only 
+        ## create points where the depth is finite.  Look back at Synthetic2D
+        ## for some hints on that.
+        """
+        float xtan = tan(fovx/2.0);
+        float ytan = tan(fovy/2.0);
+        vec3 v = towards + vx*xtan*right + vy*ytan*up;
+        ray.v = normalize(v);
+        """
+
 
     def incorporate_scan(self, V, N, trunc_dist, do_plot=False):
         """
@@ -262,5 +296,5 @@ class Reconstruction3D(object):
         self.SDF[self.weights == 0] = np.nan
 
 
-scanner = FakeScanner3D("Data/homer.json")
+scanner = FakeScanner3D("Data/cow.json")
 scanner.plot_scans()
