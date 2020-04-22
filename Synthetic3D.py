@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.image as mpimg 
+import matplotlib.image as mpimg
 from sklearn.neighbors import KDTree
 import skimage
 from skimage import measure
@@ -35,10 +35,10 @@ class FakeScanner3D(object):
         self.cameras = data['cameras']
         self.num_scans = len(self.allNormals)
         self.unpack_scans()
-    
+
     def unpack_scans(self):
         """
-        Reshape the depth and normal scans and unpack the 
+        Reshape the depth and normal scans and unpack the
         information from the [0, 255] RGB channels
         """
         W = self.W
@@ -52,7 +52,7 @@ class FakeScanner3D(object):
             normals = np.array(normals[:, :, 0:3], dtype=float)/255
             normals = normals*2 - 1
             # Just in case they aren't normalized
-            mags = np.sqrt(np.sum(normals**2, 2)) 
+            mags = np.sqrt(np.sum(normals**2, 2))
             normals = normals/mags[:, :, None]
 
             # Extract depth scan
@@ -103,7 +103,7 @@ class FakeScanner3D(object):
         if i >= self.num_scans:
             raise Exception("Requested scan beyond range")
         return {'depth':self.allDepth[i], 'normals':self.allNormals[i], 'camera':self.cameras[i]}
-    
+
     def plot_scans(self):
         """
         Make a video of all of the scans
@@ -173,7 +173,7 @@ class Reconstruction3D(object):
     weights: ndarray(res, res, res)
         Weights for the SDF points (see more info in Curless/Levoy)
     """
-    
+
     def __init__(self, res, xmin, xmax, ymin, ymax, zmin, zmax):
         # Store grid information as local variables
         self.res = res
@@ -190,7 +190,7 @@ class Reconstruction3D(object):
         self.XGrid = np.array([X.flatten(), Y.flatten(), Z.flatten()]).T
         self.SDF = np.nan*np.ones((res, res, res)) # The signed distance image
         self.weights = np.zeros((res, res, res))
-    
+
     def get_scan_points(self, depth, normals, camera):
         """
         Given a range scan, update the signed distance image and the weights
@@ -213,11 +213,11 @@ class Reconstruction3D(object):
             'fovy': float
                 Field of view in y
         }
-        
+
         Returns
         -------
         V: ndarray(M <= N1*N2, 3)
-            Points scanned in global coordinates that were actually seen 
+            Points scanned in global coordinates that were actually seen
             (non-infinite)
         N: ndarray(M <= N1*N2, 3)
             Array of corresponding normals
@@ -235,17 +235,24 @@ class Reconstruction3D(object):
         R[:, 1] = up
         R[:, 2] = -towards # Keep right handed
         R = R.T # We want the inverse
-        # Reshape the normals to be (MN) x 3 instead of M x N x 3, 
+        # Reshape the normals to be (MN) x 3 instead of M x N x 3,
         # so that each normal is a long a row
         N = np.reshape(normals, (normals.shape[0]*normals.shape[1], 3))
         N = (R.dot(N.T)).T
 
-        ## Step 2: Create an MN x 3 matrix of the position of 
+        ## Step 2: Create an MN x 3 matrix of the position of
         ## all of the points
         VX, VY = np.meshgrid(np.linspace(-1, 1, N2), np.linspace(-1, 1, N1))
+        #print(type(VX))
+        #print(VX.size) #VX and VY are size 90,000??
+        
+        #VX.flatten()
+        #VY.flatten()
+        VX = np.isfinite(VX).flatten()
+        VY = np.isfinite(VY).flatten()
         ## TODO: Translate the code below from C++ into numpy.  It is possible
         ## to do this without loops, but use them if it's easier.  VX and VX
-        ## hold the vx and vy for every point in the scan.  You should only 
+        ## hold the vx and vy for every point in the scan.  You should only
         ## create points where the depth is finite.  Look back at Synthetic2D
         ## for some hints on that.
         """
@@ -254,6 +261,29 @@ class Reconstruction3D(object):
         vec3 v = towards + vx*xtan*right + vy*ytan*up;
         ray.v = normalize(v);
         """
+        
+        xtheta = np.linspace(-fovx, fovx, self.res) / 2.0
+        ytheta = np.linspace(-fovy, fovy, self.res) / 2.0
+        V = np.ones((self.res,3))
+        #V[:] = towards[:] + VX[:]*xtheta[:]*right[:]+VY[:]*ytheta[:]*up[:] #can we skip loops and do this?
+        
+        #index errors
+        for i,xt in enumerate(xtheta):
+            for yt in (ytheta):
+                
+                xtan = np.tan(xt/2.0)
+                ytan = np.tan(yt/2.0)
+                
+                print(i)
+                V[i] = towards[i] + VX[i]*xtan*right[i] + VY[i]*ytan*up[i]
+                #print(towards[i] + VX[i]*xtan*right[i] + VY[i]*ytan*up[i])
+
+        # V = V[np.isfinite(VX), np.isfinite(VY),:]
+        N = normals[np.isfinite(VX), np.isfinite(VY),:]
+        
+        return V,N
+        
+        
 
 
     def incorporate_scan(self, V, N, trunc_dist, do_plot=False):
@@ -262,7 +292,7 @@ class Reconstruction3D(object):
         Parameters
         ----------
         V: ndarray(M, 3)
-            Points scanned in global coordinates that were actually seen 
+            Points scanned in global coordinates that were actually seen
             (non-infinite)
         N: ndarray(M, 3)
             Array of corresponding normals in global coordinates
@@ -297,4 +327,35 @@ class Reconstruction3D(object):
 
 
 scanner = FakeScanner3D("Data/cow.json")
-scanner.plot_scans()
+mincam = np.zeros(3)
+maxcam = np.zeros(3)
+cam = 0
+
+while cam < scanner.num_scans:
+        #print(scanner.cameras[cam])
+        if(scanner.cameras[cam]['pos'][0] >= maxcam[0]):
+            maxcam[0] = scanner.cameras[cam]['pos'][0]
+        elif(scanner.cameras[cam]['pos'][0] <= mincam[0]):
+            mincam[0] = scanner.cameras[cam]['pos'][0]
+        
+        if(scanner.cameras[cam]['pos'][1] >= maxcam[1]):
+            maxcam[1] = scanner.cameras[cam]['pos'][1]
+        elif (scanner.cameras[cam]['pos'][1] <= mincam[1]):
+            mincam[1] = scanner.cameras[cam]['pos'][1]
+        
+        if(scanner.cameras[cam]['pos'][2] >= maxcam[2]):
+            maxcam[2] = scanner.cameras[cam]['pos'][2]
+        elif(scanner.cameras[cam]['pos'][2] <= mincam[2]):
+            mincam[2] = scanner.cameras[cam]['pos'][2]
+            
+        cam = cam + 1
+
+recon3d = Reconstruction3D(100, mincam[0], maxcam[0], mincam[1], maxcam[1], mincam[2], maxcam[2])
+scan = 0
+
+while scan < scanner.num_scans:
+    result = scanner.get_scan(scan)
+    V,N = recon3d.get_scan_points(result['depth'], result['normals'], result['camera'])
+    scan = scan + 1
+
+#scanner.plot_scans()
