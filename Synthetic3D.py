@@ -60,7 +60,7 @@ class FakeScanner3D(object):
             depth = np.reshape(depth, (H, W, 4))
             depth = np.array(depth[:, :, 0:2], dtype=float)/255
             depth = depth[:, :, 0] + depth[:, :, 1]/256
-            depth = depth*(256*256)/(256*256-1)
+            depth = self.far*depth*(256*256)/(256*256-1)
             depth[depth == 0] = np.inf
 
             allNormals.append(normals)
@@ -242,7 +242,7 @@ class Reconstruction3D(object):
 
         ## Step 2: Create an MN x 3 matrix of the position of
         ## all of the points
-        VX, VY = np.meshgrid(np.linspace(-1, 1, N2), np.linspace(-1, 1, N1))
+        VX, VY = np.meshgrid(np.linspace(-1, 1, N2), np.linspace(1, -1, N1))
         
         VX = VX[np.isfinite(depth)]
         VY = VY[np.isfinite(depth)]
@@ -267,8 +267,6 @@ class Reconstruction3D(object):
         for i, (vx, vy, d) in enumerate(zip(VX, VY, depth)):
             V[i, :] = towards + VX[i]*xtan*right + VY[i]*ytan*up
         """
-        # Normalize direction vectors
-        V = V/np.sqrt(np.sum(V**2, 1))[:, None]
         
         # Add onto the camera's position the direction vector scaled by the depth
         V = camera['pos'][None, :] + depth[:, None]*V
