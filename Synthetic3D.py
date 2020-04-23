@@ -267,6 +267,11 @@ class Reconstruction3D(object):
         for i, (vx, vy, d) in enumerate(zip(VX, VY, depth)):
             V[i, :] = towards + VX[i]*xtan*right + VY[i]*ytan*up
         """
+        # Normalize direction vectors
+        V = V/np.sqrt(np.sum(V**2, 1))[:, None]
+        
+        # Add onto the camera's position the direction vector scaled by the depth
+        V = camera['pos'][None, :] + depth[:, None]*V
         
         return V,N
         
@@ -338,4 +343,4 @@ for scan in range(scanner.num_scans):
     recon3d.incorporate_scan(V,N,trunc_dist)
 
 
-scanner.plot_scans()
+#scanner.plot_scans()
