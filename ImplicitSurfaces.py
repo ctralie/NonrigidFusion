@@ -98,4 +98,4 @@ def mySurface():
     saveOffFileExternal("mysurface.off", VPos, ITris)
 
 if __name__ == '__main__':
-    getBowlingPin()
+    getBowlingPin();

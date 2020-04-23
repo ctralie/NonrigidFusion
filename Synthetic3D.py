@@ -239,6 +239,8 @@ class Reconstruction3D(object):
         # so that each normal is a long a row
         N = np.reshape(normals, (normals.shape[0]*normals.shape[1], 3))
         N = (R.dot(N.T)).T
+        #N = np.isfinite(N).flatten()
+        #print(N)
 
         ## Step 2: Create an MN x 3 matrix of the position of
         ## all of the points
@@ -265,21 +267,16 @@ class Reconstruction3D(object):
         xtheta = np.linspace(-fovx, fovx, self.res) / 2.0
         ytheta = np.linspace(-fovy, fovy, self.res) / 2.0
         V = np.ones((self.res,3))
-        #V[:] = towards[:] + VX[:]*xtheta[:]*right[:]+VY[:]*ytheta[:]*up[:] #can we skip loops and do this?
+        #V[:] = towards + VX[:]*xtheta[:]*right+VY[:]*ytheta[:]*up #can we skip loops and do this?
         
-        #index errors
         for i,xt in enumerate(xtheta):
             for yt in (ytheta):
                 
                 xtan = np.tan(xt/2.0)
                 ytan = np.tan(yt/2.0)
                 
-                print(i)
-                V[i] = towards[i] + VX[i]*xtan*right[i] + VY[i]*ytan*up[i]
-                #print(towards[i] + VX[i]*xtan*right[i] + VY[i]*ytan*up[i])
-
-        # V = V[np.isfinite(VX), np.isfinite(VY),:]
-        N = normals[np.isfinite(VX), np.isfinite(VY),:]
+                V[i] = towards + VX[i]*xtan*right + VY[i]*ytan*up
+              
         
         return V,N
         
@@ -324,9 +321,11 @@ class Reconstruction3D(object):
         idx = self.weights > 0
         self.SDF[idx] = numerator[idx] / self.weights[idx]
         self.SDF[self.weights == 0] = np.nan
+        
+        print(self.SDF)
 
 
-scanner = FakeScanner3D("Data/cow.json")
+scanner = FakeScanner3D("Data/homer.json")
 mincam = np.zeros(3)
 maxcam = np.zeros(3)
 cam = 0
@@ -356,6 +355,7 @@ scan = 0
 while scan < scanner.num_scans:
     result = scanner.get_scan(scan)
     V,N = recon3d.get_scan_points(result['depth'], result['normals'], result['camera'])
+    recon3d.incorporate_scan(V,N,10)
     scan = scan + 1
 
-#scanner.plot_scans()
+scanner.plot_scans()
