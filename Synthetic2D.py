@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg 
 from sklearn.neighbors import KDTree
 import skimage
+import skimage.measure
 import time
 from Lines2D import ray_intersect_loop
 
